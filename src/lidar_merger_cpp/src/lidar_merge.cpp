@@ -3,6 +3,7 @@
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/passthrough.h>
 #include <chrono>
 #include <thread>
 #include <math.h>
@@ -23,53 +24,71 @@ private:
     ros::Subscriber subpointCloudTopic_rl;
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformedCloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_transformed;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered;
     pcl::PointCloud<pcl::PointXYZI>::Ptr mergedCloud;
+
+    pcl::PassThrough<pcl::PointXYZI> pass;
 
     ros::Publisher pubMerged;
     ros::Publisher pubTransformed;
     
+    Eigen::Vector3f translation;
+    Eigen::Quaternionf rotation;
+
     std_msgs::Header cloudHeader;
+    string frameID_;
 
 public:
-    void pointCloudCallback(const sensor_msgs::PointCloud2 msg) {
-        ROS_INFO("Received a point cloud message");
-        ROS_INFO("Frame ID: %s", msg.header.frame_id.c_str());
-        copyPointCloud(msg, msg.header.frame_id.c_str());
-        cloudPublish();
 
-    }
-    
-    void copyPointCloud(const sensor_msgs::PointCloud2 laserCloudMsg, string id)
+    void copyPointCloud(const sensor_msgs::PointCloud2& laserCloudMsg, const std::string& id)
     {
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::fromROSMsg(laserCloudMsg, *cloud);
 
-        Eigen::Vector3f translation(0.0f, 0.0f, 1.4f);
-        Eigen::Quaternionf rotation(0.7071f, 0.0f, 0.0f, 0.7071f);
-        
-        if (id=="front64") {
-            Eigen::Vector3f translation(1.2f, 2.5f, -0.4f);
-            Eigen::Quaternionf rotation(0.7071f, 0.0f, 0.0f, 0.7071f);
+        // Reset the transformation matrix to Identity before applying new transformations
+        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+
+        if (id == "front_l") {
+        // if (id == "world") {
+            // translate -2.5m in x-axis and 1.2m in y-axis and rotate 180 degrees counter-clockwise around z-axis
+            translation << -2.5f, 1.2f, 0.0f;
+            rotation = Eigen::AngleAxisf(M_PI, Eigen::Vector3f::UnitZ());
+        } else if (id == "front_r") {
+        // } else if (id == "world") {
+            // translate -2.5m in x-axis and -1.2m in y-axis
+            translation << -2.5f, -1.2f, 0.0f;
+            rotation = Eigen::Quaternionf::Identity(); // No rotation specified
+        } else {
+            // translate 1.4m in z-axis rotate 90 degrees counter-clockwise around z-axis
+            translation << 0.0f, 0.0f, 1.4f;
+            rotation = Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitZ());
         }
 
-        
-        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
         transform.translation() = translation;
         transform.rotate(rotation);
 
-        pcl::transformPointCloud(*cloud, *cloud, transform);
+        pcl::transformPointCloud(*cloud, *cloud_transformed, transform);
+
+        // Use PassThrough filter to leave points where -3 < x < 0
+        if (id == "front_l" || id == "front_r") {
+            pass.setInputCloud(cloud_transformed);
+            pass.setFilterFieldName("x");
+            pass.setFilterLimits(-3, 0);
+            pass.filter(*cloud_filtered);
+            *transformedCloud = *cloud_filtered; // Store the filtered cloud
+        } else {
+            *transformedCloud = *cloud_transformed; // Store the transformed cloud
+        }
 
         cloudHeader.stamp = ros::Time::now();
-        cloudHeader = laserCloudMsg.header;
-
-        *transformedCloud = *cloud; // Convert pcl::PointXYZ to pcl::PointXYZI
+        cloudHeader.frame_id = laserCloudMsg.header.frame_id;
     }
 
 
     void cloudPublish()
     {
         sensor_msgs::PointCloud2 laserCloudTemp;
-        // projected transformed cloud
         if (pubTransformed.getNumSubscribers() != 0)
         {
             pcl::toROSMsg(*transformedCloud, laserCloudTemp);
@@ -84,13 +103,24 @@ public:
     {
         transformedCloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
         mergedCloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
+        cloud_transformed.reset(new pcl::PointCloud<pcl::PointXYZI>());
+        cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    }
+    
+
+    void pointCloudCallback(const sensor_msgs::PointCloud2 msg) {
+        ROS_INFO("Received a point cloud message");
+        ROS_INFO("Frame ID: %s", msg.header.frame_id.c_str());
+        copyPointCloud(msg, msg.header.frame_id.c_str());
+        cloudPublish();
     }
 
-    Process() : nh("~") { 
-        // subpointCloudTopic_fc = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fc, 10, &Process::pointCloudCallback, this);
-        subpointCloudTopic_ft = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_ft, 10, &Process::pointCloudCallback, this);
-        subpointCloudTopic_fr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fr, 10, &Process::pointCloudCallback, this);
-        subpointCloudTopic_fl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fl, 10, &Process::pointCloudCallback, this);
+
+    Process() : nh("~") {
+        subpointCloudTopic_fc = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fc, 10, &Process::pointCloudCallback, this); // id world
+        subpointCloudTopic_ft = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_ft, 10, &Process::pointCloudCallback, this); // id world
+        subpointCloudTopic_fr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fr, 10, &Process::pointCloudCallback, this); // id front_r
+        subpointCloudTopic_fl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fl, 10, &Process::pointCloudCallback, this); // id front_l
         subpointCloudTopic_rr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rr, 10, &Process::pointCloudCallback, this);
         subpointCloudTopic_rl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rl, 10, &Process::pointCloudCallback, this);
         

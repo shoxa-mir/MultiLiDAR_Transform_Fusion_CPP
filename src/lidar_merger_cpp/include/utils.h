@@ -44,13 +44,13 @@
 using namespace std;
 
 // Publish_topic
-extern const string pubMergedTopic = "/test_publish/merged/pandar";
-extern const string pubTransformedTopic = "/test_publish/transformed/pandar";
+extern const string pubMergedTopic = "/test_publish/merged";
+extern const string pubTransformedTopic = "/test_publish/transformed";
 extern const string frameID = "world";
 
 
 // Front_center
-extern const string pointCloudTopic_fc = "/front64/pandar";
+extern const string pointCloudTopic_fc = "/hesai/pandar";
 extern const string frameID_fc = "front64";
 
 // Front_top
@@ -58,11 +58,13 @@ extern const string pointCloudTopic_ft = "/front32/pandar";
 extern const string frameID_ft = "front32";
 
 // Front_right
-extern const string pointCloudTopic_fr = "/front_r/pandar";
+// extern const string pointCloudTopic_fr = "/front_r/pandar";
+extern const string pointCloudTopic_fr = "/pandar161/pandar";
 extern const string frameID_fr = "world";
 
 // Front_left
-extern const string pointCloudTopic_fl = "/front_l/pandar";
+// extern const string pointCloudTopic_fl = "/front_l/pandar";
+extern const string pointCloudTopic_fl = "/pandar163/pandar";
 extern const string frameID_fl = "world";
 
 // Rear_right
