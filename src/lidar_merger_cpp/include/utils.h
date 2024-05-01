@@ -50,7 +50,7 @@ extern const string frameID = "world";
 
 
 // Front_center
-extern const string pointCloudTopic_fc = "/hesai/pandar";
+extern const string pointCloudTopic_fc = "/front64/pandar";
 extern const string frameID_fc = "front64";
 
 // Front_top
