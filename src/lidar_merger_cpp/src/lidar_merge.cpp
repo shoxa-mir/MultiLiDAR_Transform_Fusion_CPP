@@ -47,23 +47,34 @@ public:
     {
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::fromROSMsg(laserCloudMsg, *cloud);
-
-        // Reset the transformation matrix to Identity before applying new transformations
+        
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
 
-        // if (id == "front_l") {
-        if (id == "world") {
+        if (id == "front_l") {
+        // if (id == "world") {
             // translate -2.5m in x-axis and 1.2m in y-axis and rotate 180 degrees counter-clockwise around z-axis
-            translation << -2.5f, 1.2f, 0.0f;
+            translation << -2.1f, 1.2f, 0.0f;
             rotation = Eigen::AngleAxisf(M_PI, Eigen::Vector3f::UnitZ());
         } else if (id == "front_r") {
         // } else if (id == "world") {
             // translate -2.5m in x-axis and -1.2m in y-axis
-            translation << -2.5f, -1.2f, 0.0f;
+            translation << -2.1f, -1.1f, 0.0f;
             rotation = Eigen::Quaternionf::Identity(); // No rotation specified
+        } else if (id == "rear_l") {
+        // } else if (id == "world") {
+            // translate -2.5m in x-axis and -1.2m in y-axis
+            translation << -8.8f, 1.1f, 0.0f;
+            rotation = Eigen::AngleAxisf(-M_PI*3/4, Eigen::Vector3f::UnitZ());
+            // rotation = Eigen::Quaternionf(0.5f, 0.0f, 0.0f, 0.866025f); 
+        } else if (id == "rear_r") {
+        // } else if (id == "world") {
+            // translate -2.5m in x-axis and -1.2m in y-axis
+            translation << -8.8f, -1.1f, 0.0f;
+            rotation = Eigen::AngleAxisf(-M_PI/4, Eigen::Vector3f::UnitZ());
         } else {
             // translate 1.4m in z-axis rotate 90 degrees counter-clockwise around z-axis
-            translation << 0.0f, 0.0f, 1.4f;
+            // translation << 0.0f, 0.0f, 1.4f;
+            translation << 0.0f, 0.0f, 0.0f;
             rotation = Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitZ());
         }
 
@@ -73,11 +84,27 @@ public:
         pcl::transformPointCloud(*cloud, *cloud_transformed, transform);
 
         // Use PassThrough filter to leave points where -3 < x < 0
-        if (id == "front_l" || id == "world") {
+        if (id == "front_l" || id == "front_r") {
             pass.setInputCloud(cloud_transformed);
             pass.setFilterFieldName("x");
-            pass.setFilterLimits(-5, 0);
+            pass.setFilterLimits(-5.5, 0);
             pass.filter(*cloud_filtered);
+            *transformedCloud = *cloud_filtered; // Store the filtered cloud
+        } else if (id == "rear_l" || id == "rear_r") {
+            pass.setInputCloud(cloud_transformed);
+            pass.setFilterFieldName("x");
+            pass.setFilterLimits(-50, -5.5);
+            pass.filter(*cloud_filtered);
+
+            pass.setInputCloud(cloud_filtered);
+            pass.setFilterFieldName("y");
+            if (id == "rear_r") {
+                pass.setFilterLimits(-50, 0);
+            } else {
+                pass.setFilterLimits(0, 50);
+            }
+            pass.filter(*cloud_filtered);
+
             *transformedCloud = *cloud_filtered; // Store the filtered cloud
         } else {
             *transformedCloud = *cloud_transformed; // Store the transformed cloud
@@ -124,8 +151,8 @@ public:
     
 
     void pointCloudCallback(const sensor_msgs::PointCloud2 msg) {
-        ROS_INFO("Received a point cloud message");
-        ROS_INFO("Frame ID: %s", msg.header.frame_id.c_str());
+        // ROS_INFO("Received a point cloud message");
+        // ROS_INFO("Frame ID: %s", msg.header.frame_id.c_str());
         copyPointCloud(msg, msg.header.frame_id.c_str());
         // cloudPublish();
     }
