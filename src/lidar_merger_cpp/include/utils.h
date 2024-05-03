@@ -44,8 +44,8 @@
 using namespace std;
 
 // Publish_topic
-extern const string pubMergedTopic = "/test_publish/merged";
-extern const string pubTransformedTopic = "/test_publish/transformed";
+extern const string pubMergedTopic = "cloud_merged";
+extern const string pubTransformedTopic = "cloud_transformed";
 extern const string frameID = "world";
 
 

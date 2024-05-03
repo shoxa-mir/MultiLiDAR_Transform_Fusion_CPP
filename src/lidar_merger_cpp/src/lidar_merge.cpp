@@ -43,6 +43,13 @@ private:
     std::mutex merge_mutex;
 
 public:
+    // void cloudFilter(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
+    // {
+    //     pass.setInputCloud(cloud);
+    //     pass.setFilterFieldName("x");
+    //     pass.setFilterLimits(-5.5, 0);
+    //     pass.filter(*cloud_filtered);
+    // }
 
     void copyPointCloud(const sensor_msgs::PointCloud2& laserCloudMsg, const std::string& id)
     {
@@ -52,29 +59,19 @@ public:
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
 
         if (id == "front_l") {
-        // if (id == "world") {
-            // translate -2.5m in x-axis and 1.2m in y-axis and rotate 180 degrees counter-clockwise around z-axis
             translation << -2.1f, 1.0f, 0.0f;
             rotation = Eigen::AngleAxisf(M_PI, Eigen::Vector3f::UnitZ());
         } else if (id == "front_r") {
-        // } else if (id == "world") {
-            // translate -2.5m in x-axis and -1.2m in y-axis
             translation << -2.1f, -1.0f, 0.0f;
-            rotation = Eigen::Quaternionf::Identity(); // No rotation specified
+            rotation = Eigen::Quaternionf::Identity();
         } else if (id == "rear_l") {
-        // } else if (id == "world") {
-            // translate -2.5m in x-axis and -1.2m in y-axis
             translation << -8.8f, 1.0f, 0.0f;
-            rotation = Eigen::AngleAxisf(-M_PI*3/4, Eigen::Vector3f::UnitZ());
-            // rotation = Eigen::Quaternionf(0.5f, 0.0f, 0.0f, 0.866025f); 
+            rotation = Eigen::AngleAxisf(-M_PI*5/6, Eigen::Vector3f::UnitZ());
+            // rotation = Eigen::AngleAxisf(-M_PI*3/4, Eigen::Vector3f::UnitZ());
         } else if (id == "rear_r") {
-        // } else if (id == "world") {
-            // translate -2.5m in x-axis and -1.2m in y-axis
             translation << -8.8f, -1.0f, 0.0f;
-            rotation = Eigen::AngleAxisf(-M_PI/4, Eigen::Vector3f::UnitZ());
+            rotation = Eigen::AngleAxisf(-M_PI/6, Eigen::Vector3f::UnitZ());
         } else {
-            // translate 1.4m in z-axis rotate 90 degrees counter-clockwise around z-axis
-            // translation << 0.0f, 0.0f, 1.4f;
             translation << 0.0f, 0.0f, 0.0f;
             rotation = Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitZ());
         }
@@ -84,13 +81,12 @@ public:
 
         pcl::transformPointCloud(*cloud, *cloud_transformed, transform);
 
-        // Use PassThrough filter to leave points where -3 < x < 0
         if (id == "front_l" || id == "front_r") {
             pass.setInputCloud(cloud_transformed);
             pass.setFilterFieldName("x");
             pass.setFilterLimits(-5.5, 0);
             pass.filter(*cloud_filtered);
-            *transformedCloud = *cloud_filtered; // Store the filtered cloud
+            *transformedCloud = *cloud_filtered;
         } else if (id == "rear_l" || id == "rear_r") {
             pass.setInputCloud(cloud_transformed);
             pass.setFilterFieldName("x");
@@ -106,21 +102,18 @@ public:
             }
             pass.filter(*cloud_filtered);
 
-            *transformedCloud = *cloud_filtered; // Store the filtered cloud
+            *transformedCloud = *cloud_filtered;
         } else {
-            *transformedCloud = *cloud_transformed; // Store the transformed cloud
+            *transformedCloud = *cloud_transformed;
         }
 
         cloudHeader.stamp = ros::Time::now();
         cloudHeader.frame_id = laserCloudMsg.header.frame_id;
         {
             std::lock_guard<std::mutex> lock(merge_mutex);
-            *mergedCloud += *transformedCloud; // Ensure mergedCloud accumulates
-            // ROS_INFO_STREAM("Merged cloud now has " << mergedCloud->points.size() << " points.");
+            *mergedCloud += *transformedCloud;
             idx++;
         }
-        // std::lock_guard<std::mutex> lock(merge_mutex);
-        // *mergedCloud += *transformedCloud;
     }
 
 
@@ -135,7 +128,7 @@ public:
             pubTransformed.publish(laserCloudTemp);
         }
         
-        if (pubMerged.getNumSubscribers() > 0 & idx == 5) {
+        if (pubMerged.getNumSubscribers() > 0 & idx%5==0) {
             sensor_msgs::PointCloud2 output;
             pcl::toROSMsg(*mergedCloud, output);
             output.header.stamp = ros::Time::now();
@@ -145,8 +138,6 @@ public:
             ROS_INFO_STREAM("Merged cloud now has " << mergedCloud->points.size() << " points.");
             mergedCloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
             // ROS_INFO_STREAM("Reset " << mergedCloud->points.size() << " points.");
-            // ROS_INFO_STREAM("Reset id " << idx << ".");
-            idx = 0;
         }
     }
 
@@ -161,8 +152,6 @@ public:
     
 
     void pointCloudCallback(const sensor_msgs::PointCloud2 msg) {
-        // ROS_INFO("Received a point cloud message");
-        // ROS_INFO("Frame ID: %s", msg.header.frame_id.c_str());
         copyPointCloud(msg, msg.header.frame_id.c_str());
         cloudPublish();
     }
@@ -173,14 +162,15 @@ public:
         // subpointCloudTopic_ft = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_ft, 10, &Process::pointCloudCallback, this);
         subpointCloudTopic_fr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fr, 10, &Process::pointCloudCallback, this);
         subpointCloudTopic_fl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_fl, 10, &Process::pointCloudCallback, this);
-        subpointCloudTopic_rr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rr, 10, &Process::pointCloudCallback, this);
-        subpointCloudTopic_rl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rl, 10, &Process::pointCloudCallback, this);
+        // subpointCloudTopic_rr = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rr, 10, &Process::pointCloudCallback, this);
+        // subpointCloudTopic_rl = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic_rl, 10, &Process::pointCloudCallback, this);
     }
 
 
     void setupPublishers() {
-        pubMerged = nh.advertise<sensor_msgs::PointCloud2>("output_cloud_merged", 1);
-        pubTransformed = nh.advertise<sensor_msgs::PointCloud2>("output_cloud_transformed", 1);
+        pubMerged = nh.advertise<sensor_msgs::PointCloud2>("pandar", 1);
+        // pubMerged = nh.advertise<sensor_msgs::PointCloud2>(pubMergedTopic, 1);
+        pubTransformed = nh.advertise<sensor_msgs::PointCloud2>(pubTransformedTopic, 1);
     }
 
 
@@ -197,7 +187,8 @@ public:
 
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "lidar_fusion");
+    // ros::init(argc, argv, "lidar_fusion");
+    ros::init(argc, argv, "hesai");
     while(ros::ok()) {
         Process P;
         ros::spin();
